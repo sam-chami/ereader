@@ -9,12 +9,31 @@
 # * | Date        :   19-01-2023
 # -----------------------------------------------------------------------------
 
-from machine import Pin, SPI
-import framebuf
+from machine import Pin
 import utime
 import epaper
 
 page = 0
+
+current_act = 0   # 0: menu
+                  # 1: book menu
+                  # 2: book
+                  # 3: TBD
+
+debounce_time=0
+def btnPress(pin):
+    global debounce_time, page
+    if (utime.ticks_ms()-debounce_time) > 1500:
+        debounce_time=utime.ticks_ms()
+        print("interrupt")
+        print(pin)
+        if current_act == 2:
+            if pin == Pin(22, mode=Pin.IN, pull=Pin.PULL_UP):
+                page = page + 1
+                book("book", page)
+            if pin == Pin(21, mode=Pin.IN, pull=Pin.PULL_UP):
+                page = page - 1
+                book("book", page)
 
 def text_wrap(str,x,y,w,h,color,border=None):
 	# optional box border
@@ -48,18 +67,34 @@ def book(book_name, page):
     for i in range(page):
         book.readline()
     
-    text_wrap(book.readline().rstrip("\n"), 0, 20, 128, 276, 0x00)
+    page = book.readline().rstrip("\n")
+    
+    if page[0] == "¿":
+        text_center(page.replace("¿", ""), 136, 0x00)
+    else:
+        text_wrap(page, 0, 20, 128, 276, 0x00)
+    
     book.close()
     epd.display(epd.buffer)
 
 if __name__=='__main__':
+    btn_next = Pin(22, Pin.IN, Pin.PULL_UP)
+    btn_back = Pin(21, Pin.IN, Pin.PULL_UP)
+    
+    btn_next.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
+    btn_back.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
+   
     epd = epaper.EPD_2in9()
     epd.Clear(0xff)
     
     epd.fill(0xff)
     
-    
     epd.delay_ms(2000)
+    
+    current_act = 2
+    book("book", page)
+    while True:
+        epd.delay_ms(10)
     
     # epd.vline(10, 90, 60, 0x00)
     # epd.vline(120, 90, 60, 0x00)
@@ -75,13 +110,13 @@ if __name__=='__main__':
     # epd.display_Base(epd.buffer)
     # epd.delay_ms(2000)
     
-    for i in range(0, 10):
-        book("book", page)
-        page = page + 1
-        epd.delay_ms(2000)
+    # for i in range(0, 20):
+    #     book("book", page)
+    #     page = page + 1
+    #     epd.delay_ms(3500)
         
     epd.init()
-    # epd.Clear(0xff)
+    epd.Clear(0xff)
     epd.delay_ms(2000)
     print("sleep")
     epd.sleep()
