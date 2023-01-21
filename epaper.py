@@ -248,6 +248,9 @@ class EPD_2in9(framebuf.FrameBuffer):
             for i in range(0, int(self.width / 8)):
                 self.send_data(image[i + j * int(self.width / 8)])
         self.TurnOnDisplay_Partial()
+        
+    # def pip(self, bmp, x, y, key = -1, palette = framebuf.MONO_HLSB):
+    #     framebuf.blit(bmp, x, y, key, palette)
 
     def Clear(self, color):
         self.send_command(0x24) # WRITE_RAM

@@ -12,6 +12,7 @@
 from machine import Pin
 import utime
 import epaper
+import framebuf
 
 page = 0
 
@@ -23,17 +24,23 @@ current_act = 0   # 0: menu
 debounce_time=0
 def btnPress(pin):
     global debounce_time, page
-    if (utime.ticks_ms()-debounce_time) > 1500:
-        debounce_time=utime.ticks_ms()
+    pin.irq(handler=None)
+    if (utime.ticks_ms()-debounce_time) > 10:
         print("interrupt")
         print(pin)
         if current_act == 2:
-            if pin == Pin(22, mode=Pin.IN, pull=Pin.PULL_UP):
-                page = page + 1
-                book("book", page)
             if pin == Pin(21, mode=Pin.IN, pull=Pin.PULL_UP):
-                page = page - 1
+                page = page + 1
+                print(page)
+                print("next")
                 book("book", page)
+            if pin == Pin(22, mode=Pin.IN, pull=Pin.PULL_UP):
+                page = page - 1
+                print("back")
+                book("book", page)
+        debounce_time=utime.ticks_ms()
+        pin.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
+    utime.sleep(1)
 
 def text_wrap(str,x,y,w,h,color,border=None):
 	# optional box border
@@ -77,9 +84,19 @@ def book(book_name, page):
     book.close()
     epd.display(epd.buffer)
 
+def menu(item, item_bmp):
+    # item title
+    epd.fill_rect(0, 4, 128, 24, 0x00)
+    text_center(item, 9, 0xFF)
+    # item bitemap (icon/bookcover)
+    epd.rect(4, 34, 120, 174, 0x00)
+    
+    epd.display(epd.buffer)
+    
+
 if __name__=='__main__':
-    btn_next = Pin(22, Pin.IN, Pin.PULL_UP)
-    btn_back = Pin(21, Pin.IN, Pin.PULL_UP)
+    btn_next = Pin(21, Pin.IN, Pin.PULL_UP)
+    btn_back = Pin(22, Pin.IN, Pin.PULL_UP)
     
     btn_next.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
     btn_back.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
@@ -89,10 +106,14 @@ if __name__=='__main__':
     
     epd.fill(0xff)
     
-    epd.delay_ms(2000)
-    
     current_act = 2
-    book("book", page)
+    
+    if current_act == 1:
+        menu("name", None)
+    
+    if current_act == 2:
+        book("book", page)
+    
     while True:
         epd.delay_ms(10)
     
