@@ -13,34 +13,71 @@ from machine import Pin
 import utime
 import epaper
 import framebuf
+import os
 
 page = 0
+reading = "" # ej: DonQuijote
 
 current_act = 0   # 0: menu
                   # 1: book menu
                   # 2: book
                   # 3: TBD
 
+
+# scan for books
+unstripped = os.listdir('books')
+items = []
+
+for i in range(len(unstripped)):
+    items.append(unstripped[i].split(".")[0])
+print(unstripped)
+print(items)
+
 debounce_time=0
 def btnPress(pin):
-    global debounce_time, page
+    global debounce_time, page, items, current_act, reading
     pin.irq(handler=None)
-    if (utime.ticks_ms()-debounce_time) > 10:
-        print("interrupt")
+    if (utime.ticks_ms()-debounce_time) > 20:
+        print(page)
         print(pin)
+        # When in bookshelf mode
+        if current_act == 1:
+            if pin == Pin(20, mode=Pin.IN, pull=Pin.PULL_UP):
+                current_act = 2
+                reading = items[page]
+                book(reading, 0)
+                page = 0
+            if pin == Pin(21, mode=Pin.IN, pull=Pin.PULL_UP):
+                if page != len(items) - 1:
+                    page = page + 1
+                else:
+                    page = 0
+                menu(items[page])
+            if pin == Pin(22, mode=Pin.IN, pull=Pin.PULL_UP):
+                if page == 0:
+                    page = len(items) - 1
+                else:
+                    page = page - 1
+                menu(items[page])
+            pin.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
+            debounce_time=utime.ticks_ms()
+            return 0
+        # When in reading mode
         if current_act == 2:
+            if pin == Pin(20, mode=Pin.IN, pull=Pin.PULL_UP):
+                current_act = 1
+                page = 0
+                menu(items[page])
             if pin == Pin(21, mode=Pin.IN, pull=Pin.PULL_UP):
                 page = page + 1
-                print(page)
-                print("next")
-                book("book", page)
+                book(reading, page)
             if pin == Pin(22, mode=Pin.IN, pull=Pin.PULL_UP):
                 page = page - 1
-                print("back")
-                book("book", page)
-        debounce_time=utime.ticks_ms()
-        pin.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
-    utime.sleep(1)
+                book(reading, page)
+            pin.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
+            debounce_time=utime.ticks_ms()
+            return 0
+    debounce_time=utime.ticks_ms()
 
 def text_wrap(str,x,y,w,h,color,border=None):
 	# optional box border
@@ -66,15 +103,18 @@ def book(book_name, page):
     epd.fill(0xff)
     
     # Open book
-    book = open(book_name + ".txt", "r")
+    book = open("/books/" + book_name + ".txt", "r")
     # Book title and info
     epd.fill_rect(0, 0, 128, 16, 0x00)
-    text_center(book.readline().rstrip("\n"), 5, 0xFF)
+    text_center("Page " + str(page + 1), 5, 0xFF)
     
     for i in range(page):
         book.readline()
     
-    page = book.readline().rstrip("\n")
+    try:
+        page = book.readline().rstrip("\n")
+    except:
+        page = "¿The End"
     
     if page[0] == "¿":
         text_center(page.replace("¿", ""), 136, 0x00)
@@ -84,20 +124,25 @@ def book(book_name, page):
     book.close()
     epd.display(epd.buffer)
 
-def menu(item, item_bmp):
-    # item title
-    epd.fill_rect(0, 4, 128, 24, 0x00)
-    text_center(item, 9, 0xFF)
-    # item bitemap (icon/bookcover)
-    epd.rect(4, 34, 120, 174, 0x00)
+def menu(item, page = None):
+    with open("/pics/" + item + ".pbm", 'rb') as fd:
+        pbm_format = fd.readline().strip()
+        if pbm_format != b'P4':
+            print("ERROR: input file must be binary PBM (type P4)")
+            return 1
+        pbm_dims = [int(d) for d in fd.readline().strip().split()]
+        pbm_data = fd.read()
+
+    bmp = bytearray(pbm_data)
     
-    epd.display(epd.buffer)
-    
+    epd.display(bmp)
 
 if __name__=='__main__':
+    btn_ok = Pin(20, Pin.IN, Pin.PULL_UP)
     btn_next = Pin(21, Pin.IN, Pin.PULL_UP)
     btn_back = Pin(22, Pin.IN, Pin.PULL_UP)
     
+    btn_ok.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
     btn_next.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
     btn_back.irq(trigger=Pin.IRQ_FALLING, handler=btnPress)
    
@@ -106,13 +151,8 @@ if __name__=='__main__':
     
     epd.fill(0xff)
     
-    current_act = 2
-    
-    if current_act == 1:
-        menu("name", None)
-    
-    if current_act == 2:
-        book("book", page)
+    current_act = 1
+    menu(items[page])
     
     while True:
         epd.delay_ms(10)
