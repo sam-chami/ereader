@@ -30,7 +30,7 @@ items = []
 
 for i in range(len(unstripped)):
     items.append(unstripped[i].split(".")[0])
-print(unstripped)
+items.append("scrClear")
 print(items)
 
 debounce_time=0
@@ -43,10 +43,13 @@ def btnPress(pin):
         # When in bookshelf mode
         if current_act == 1:
             if pin == Pin(20, mode=Pin.IN, pull=Pin.PULL_UP):
-                current_act = 2
-                reading = items[page]
-                book(reading, 0)
-                page = 0
+                if items[page] == "scrClear":
+                    epd.Clear(0xff)
+                else:
+                    current_act = 2
+                    reading = items[page]
+                    book(reading, 0)
+                    page = 0
             if pin == Pin(21, mode=Pin.IN, pull=Pin.PULL_UP):
                 if page != len(items) - 1:
                     page = page + 1
